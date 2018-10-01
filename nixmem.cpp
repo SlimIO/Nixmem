@@ -6,16 +6,23 @@
 using namespace std;
 using namespace Napi;
 
-
 Value getSysInfo(const CallbackInfo& info){
     Env env = info.Env();
 
     struct sysinfo s_info;
     int status = sysinfo(&s_info);
-    printf("Code error = %d\n", status);
+    if(status != 0){
+        printf("Code error = %d\n", status);
+    }
 
-    Object ret = Object::New(env);  
-    //ret.Set("loads", s_info.loads);
+    Object ret = Object::New(env);
+    Array loadArr = Array::New(env, (size_t) 3);
+    loadArr[(unsigned)0] = Number::New(env, s_info.loads[0]);
+    loadArr[(unsigned)1] = Number::New(env, s_info.loads[1]);
+    loadArr[(unsigned)2] = Number::New(env, s_info.loads[2]);
+    
+    ret.Set("uptime", s_info.uptime);
+    ret.Set("loads", loadArr);
     ret.Set("totalram", s_info.totalram);
     ret.Set("freeram", s_info.freeram);
     ret.Set("sharedram", s_info.sharedram);
