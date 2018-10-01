@@ -10,10 +10,10 @@ using namespace Napi;
 Value getSysInfo(const CallbackInfo& info){
     Env env = info.Env();
 
-    sysinfo s_info;
+    struct sysinfo s_info;
     int status = sysinfo(&s_info);
-    printf("Code error = %d\n", error);
-    
+    printf("Code error = %d\n", status);
+
     Object ret = Object::New(env);  
     ret.Set("loads", s_info.loads);
     ret.Set("totalram", s_info.totalram);
