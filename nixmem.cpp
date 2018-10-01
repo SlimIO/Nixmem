@@ -15,7 +15,7 @@ Value getSysInfo(const CallbackInfo& info){
     printf("Code error = %d\n", status);
 
     Object ret = Object::New(env);  
-    ret.Set("loads", s_info.loads);
+    //ret.Set("loads", s_info.loads);
     ret.Set("totalram", s_info.totalram);
     ret.Set("freeram", s_info.freeram);
     ret.Set("sharedram", s_info.sharedram);
