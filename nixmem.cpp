@@ -17,6 +17,10 @@ using namespace std;
 using namespace Napi;
 
 #if __FreeBSD__
+
+/**
+ * sysctl C++ wrapper
+ */
 template<class T>
 T sysInfo(const int firstLevel, const int secondLevel) {
     int name[2] = {firstLevel, secondLevel};
@@ -27,6 +31,9 @@ T sysInfo(const int firstLevel, const int secondLevel) {
     return infoValue;
 }
 
+/**
+ * sysctl C++ structured wrapper
+ */
 int sysInfo(const int firstLevel, const int secondLevel, void* info) {
     int ret;
     int name[2] = {firstLevel, secondLevel};
@@ -41,6 +48,9 @@ int sysInfo(const int firstLevel, const int secondLevel, void* info) {
     return sysctl(name, (u_int) 2, &info, &len, NULL, 0);
 }
 
+/**
+ * FreeBSD getSysInfo binding
+ */
 Value getSysInfo(const CallbackInfo& info){
     Env env = info.Env();
     struct vmtotal vm_info;
@@ -100,28 +110,35 @@ struct cmp_str {
  * All possible proc fields
  */
 map<const char*, const char*, cmp_str> procFields = {
-    {"MemTotal", "memTotal"},
-    {"MemFree", "memFree"},
-    {"MemShared", "memShared"},
-    {"MemAvailable", "memAvailable"},
-    {"SwapCached", "swapCached"},
-    {"SwapTotal", "swapTotal"},
-    {"SwapFree", "swapFree"},
-    {"AnonPages", "anonPages"},
-    {"PageTables", "pageTables"},
-    {"ShmemHugePages", "shmemHugePages"},
-    {"ShmemPmdMapped", "shmemPmdMapped"},
-    {"HugePages_Total", "hugePagesTotal"},
-    {"HugePages_Free", "hugePagesFree"},
-    {"HugePages_Rsvd", "hugePagesRsvd"},
-    {"HugePages_Surp", "hugePagesSurp"},
-    {"Hugepagesize", "hugePageSize"},
-    {"CommitLimit", "commitLimit"},
-    {"VmallocTotal", "vMallocTotal"},
-    {"VmallocUsed", "vMallocUsed"},
-    {"VmallocChunk", "vMallocChunk"}
+    {"MemTotal:", "memTotal"},
+    {"MemFree:", "memFree"},
+    {"MemShared:", "memShared"},
+    {"MemAvailable:", "memAvailable"},
+    {"SwapCached:", "swapCached"},
+    {"SwapTotal:", "swapTotal"},
+    {"SwapFree:", "swapFree"},
+    {"AnonPages:", "anonPages"},
+    {"PageTables:", "pageTables"},
+    {"ShmemHugePages:", "shmemHugePages"},
+    {"ShmemPmdMapped:", "shmemPmdMapped"},
+    {"HugePages_Total:", "hugePagesTotal"},
+    {"HugePages_Free:", "hugePagesFree"},
+    {"HugePages_Rsvd:", "hugePagesRsvd"},
+    {"HugePages_Surp:", "hugePagesSurp"},
+    {"Hugepagesize:", "hugePageSize"},
+    {"CommitLimit:", "commitLimit"},
+    {"VmallocTotal:", "vMallocTotal"},
+    {"VmallocUsed:", "vMallocUsed"},
+    {"VmallocChunk:", "vMallocChunk"}
 };
 
+/**
+ * Linux getSysInfo binding
+ * 
+ * @doc: https://access.redhat.com/solutions/406773
+ * @doc: https://www.centos.org/docs/5/html/5.1/Deployment_Guide/s2-proc-meminfo.html
+ * @doc: https://superuser.com/questions/521551/cat-proc-meminfo-what-do-all-those-numbers-mean
+ */
 Value getSysInfo(const CallbackInfo& info){
     Env env = info.Env();
     char line[255], fieldName[50];
@@ -137,15 +154,11 @@ Value getSysInfo(const CallbackInfo& info){
 
     Object ret = Object::New(env);
     while (fgets(line, sizeof(line), fd) != NULL) {
-        if (sscanf(line, "%s %u", &fieldName, &fieldValue) != 2) {
-            continue;
+        if (sscanf(line, "%s %u", &fieldName, &fieldValue) == 2) {
+            if (procFields.find(fieldName) != procFields.end()) {
+                ret.Set(procFields.at(fieldName), fieldValue);
+            }
         }
-        fieldName[strlen(fieldName) -1] = '\0';
-
-        if (procFields.find(fieldName) == procFields.end()) {
-            continue;
-        }
-        ret.Set(procFields.at(fieldName), fieldValue);
     }
     fclose(fd);
 
