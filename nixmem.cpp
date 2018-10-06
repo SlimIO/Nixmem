@@ -1,9 +1,12 @@
 #include "napi.h"
 // #include <sys/sysinfo.h>
 #include <sys/types.h>
+#include <vm/vm_param.h>
 #include <sys/sysctl.h>
 #include <iostream>
 #include <string>
+#include <sys/vmmeter.h>
+#include <sys/resource.h>
 
 using namespace std;
 using namespace Napi;
@@ -14,107 +17,76 @@ T sysInfo(const int firstLevel, const int secondLevel ){
     int name[2];
     name[0] = firstLevel;
     name[1] = secondLevel;
-    size_t len;
-    sysctl(name, (u_int) 2, NULL, &len, NULL, 0);
-    T infoValue = (T) malloc(len);
-    sysctl(name, (u_int) 2, (void *)infoValue, &len, NULL, 0);
-    //cout << "typeof : " <<  typeid(infoValue).name() << endl;
+    T infoValue;
+    size_t len = sizeof(infoValue);
+    sysctl(name, (u_int) 2, &infoValue, &len, NULL, 0);
     return infoValue;
 }
- 
-// int sysCtl(const int firstLevel, const int secondLevel ){
-//     int name[2];
-//     name[0] = firstLevel;
-//     name[1] = secondLevel;
-//     size_t len;
-//     sysctl(name, (u_int) 2, NULL, &len, NULL, 0);
-//     int  infoValue = (int) malloc(len);
-//     sysctl(name, (u_int) 2, (void *)infoValue, &len, NULL, 0);
-    
-//     return String(infoValue);
-// }
 
+int sysInfo(const int firstLevel, const int secondLevel, void *info ){
+    int name[2];
+    name[0] = firstLevel;
+    name[1] = secondLevel;
+    size_t len = sizeof(info);
+    int status = sysctl(name, (u_int) 2, &info, &len, NULL, 0);
+    return status;
+}
 
 Value getSysInfo(const CallbackInfo& info){
     Env env = info.Env();
 
-    // const int name[] = {
-    //     CTL_HW,
-    //     HW_MACHINE
-    //     HW_MODEL,
-    //     HW_NCPU,
-    //     HW_BYTEORDER,
-    //     HW_PHYSMEM,
-    //     HW_USERMEM,
-    //     HW_MACHINE_ARCH,
-    //     HW_REALMEM
-    // };
+    unsigned int  nCPU = sysInfo<unsigned int>(CTL_HW, HW_NCPU);
+    long byteOrder = sysInfo<long>(CTL_HW, HW_BYTEORDER);
+    long physMem = sysInfo<long>(CTL_HW, HW_PHYSMEM);
+    long userMem = sysInfo<long>(CTL_HW, HW_USERMEM);
+    long pageSize = sysInfo<long>(CTL_HW, HW_PAGESIZE);
+    long realMem = sysInfo<long>(CTL_HW, HW_REALMEM);
 
-    // u_int namelen = sizeof(name);
-    char * machine = sysInfo<char *>(CTL_HW, HW_MACHINE);
-    char * model = sysInfo<char *>(CTL_HW, HW_MODEL);
-    long int nCPU = sysInfo<long int>(CTL_HW, HW_NCPU);
-    long int  byteOrder = sysInfo<long int >(CTL_HW, HW_BYTEORDER);
-    long int  physMem = sysInfo<long int >(CTL_HW, HW_PHYSMEM);
-    long int  userMem = sysInfo<long int >(CTL_HW, HW_USERMEM);
-    char * machineArch = sysInfo<char *>(CTL_HW, HW_MACHINE_ARCH);
-    long int  realMem = sysInfo<long int >(CTL_HW, HW_REALMEM);
+    // struct loadavg load_info;
+    // int statusLoadavg = sysInfo(CTL_VM, VM_LOADAVG, &load_info);
+    struct vmtotal vm_info;
+    int statusVmtotal = sysInfo(CTL_VM, VM_TOTAL, &vm_info);
+    bool swapping_enable = sysInfo<bool>(CTL_VM, VM_SWAPPING_ENABLED);
+    long vFreeMin = sysInfo<long>(CTL_VM, VM_V_FREE_MIN);
+    long vFreeReserved = sysInfo<long>(CTL_VM, VM_V_FREE_RESERVED);
+    long vFreeTarget = sysInfo<long>(CTL_VM, VM_V_FREE_TARGET);
+    long vInactiveTarget = sysInfo<long>(CTL_VM, VM_V_INACTIVE_TARGET);
+    long vPageoutFreeMin = sysInfo<long>(CTL_VM, VM_V_PAGEOUT_FREE_MIN);
+    // long vOvercommit = sysInfo<long>(CTL_VM, VM_OVERCOMMIT);
 
-    // cout << "HW_MACHINE : " << machine << endl;
-    // cout << "HW_MODEL : " << model << endl;
-    // cout << "HW_NCPU : " << nCPU << endl;
-    // cout << "HW_BYTEORDER : " << byteOrder << endl;
-    // cout << "HW_PHYSMEM : " << physMem << endl;
-    // cout << "HW_USERMEM : " << userMem << endl;
-    // cout << "HW_MACHINE_ARCH : " << machineArch << endl;
-    // cout << "HW_REALMEM : " << realMem << endl;
-    
+    Object vmtotal = Object::New(env);
+    vmtotal.Set("t_vm", vm_info.t_vm);
+    vmtotal.Set("t_avm", vm_info.t_avm);
+    vmtotal.Set("t_rm", vm_info.t_rm);
+    vmtotal.Set("t_arm", vm_info.t_arm);
+    vmtotal.Set("t_vmshr", vm_info.t_vmshr);
+    vmtotal.Set("t_avmshr", vm_info.t_avmshr);
+    vmtotal.Set("t_rmshr", vm_info.t_rmshr);
+    vmtotal.Set("t_armshr", vm_info.t_armshr);
+    vmtotal.Set("t_free", vm_info.t_free);
+    vmtotal.Set("t_rq", vm_info.t_rq);
+    vmtotal.Set("t_dw", vm_info.t_dw);
+    vmtotal.Set("t_pw", vm_info.t_pw);
+    vmtotal.Set("t_sl", vm_info.t_sl);
+    vmtotal.Set("t_sw", vm_info.t_sw);
+
     Object ret = Object::New(env);
-
-    ret.Set("machine", machine);
-    ret.Set("model", model);
     ret.Set("nCPU", nCPU);
     ret.Set("byteOrder", byteOrder);
     ret.Set("physMem", physMem);
-    ret.Set("physMem", userMem);
-    ret.Set("physMem", machineArch);
-    ret.Set("physMem", realMem);
+    ret.Set("userMem", userMem);
+    ret.Set("pageSize", pageSize);
+    ret.Set("realMem", realMem);
+    ret.Set("vmtotal", vmtotal);
+    ret.Set("swapping_enable", swapping_enable);
+    ret.Set("vFreeMin", vFreeMin);
+    ret.Set("vFreeReserved", vFreeReserved);
+    ret.Set("vFreeTarget", vFreeTarget);
+    ret.Set("vInactiveTarget", vInactiveTarget);
+    ret.Set("vPageoutFreeMin", vPageoutFreeMin);
 
     return ret;
 }
-
-
-// Value getSysInfo(const CallbackInfo& info){
-//     Env env = info.Env();
-
-//     struct sysinfo s_info;
-//     int status = sysinfo(&s_info);
-//     if(status != 0){
-//         printf("Code error = %d\n", status);
-//     }
-
-//     Object ret = Object::New(env);
-//     Array loadArr = Array::New(env, (size_t) 3);
-//     loadArr[(unsigned)0] = Number::New(env, s_info.loads[0]);
-//     loadArr[(unsigned)1] = Number::New(env, s_info.loads[1]);
-//     loadArr[(unsigned)2] = Number::New(env, s_info.loads[2]);
-    
-//     ret.Set("uptime", s_info.uptime);
-//     ret.Set("loads", loadArr);
-//     ret.Set("totalram", s_info.totalram);
-//     ret.Set("freeram", s_info.freeram);
-//     ret.Set("sharedram", s_info.sharedram);
-//     ret.Set("bufferram", s_info.bufferram);
-//     ret.Set("totalswap", s_info.totalswap);
-//     ret.Set("freeswap", s_info.freeswap);
-//     ret.Set("procs", s_info.procs);
-//     ret.Set("totalhigh", s_info.totalhigh);
-//     ret.Set("freehigh", s_info.freehigh);
-//     ret.Set("mem_unit", s_info.mem_unit);
-//     ret.Set("_f", s_info._f);
-
-//     return ret;
-// }
 
 
 /*
