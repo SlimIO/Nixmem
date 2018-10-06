@@ -1,16 +1,22 @@
 #include "napi.h"
 #include <errno.h>
 #include <sstream>
-#include <iostream>
+
+#if __FreeBSD__
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <sys/vmmeter.h>
 #include <sys/resource.h>
 #include <vm/vm_param.h>
+#else
+#include <map>
+#include <sys/sysinfo.h>
+#endif
 
 using namespace std;
 using namespace Napi;
 
+#if __FreeBSD__
 template<class T>
 T sysInfo(const int firstLevel, const int secondLevel) {
     int name[2] = {firstLevel, secondLevel};
@@ -79,6 +85,74 @@ Value getSysInfo(const CallbackInfo& info){
 
     return ret;
 }
+#else
+
+/**
+ * String comparator by value
+ */
+struct cmp_str {
+   bool operator()(char const *a, char const *b){
+      return strcmp(a, b) < 0;
+   }
+};
+
+/**
+ * All possible proc fields
+ */
+map<const char*, const char*, cmp_str> procFields = {
+    {"MemTotal", "memTotal"},
+    {"MemFree", "memFree"},
+    {"MemShared", "memShared"},
+    {"MemAvailable", "memAvailable"},
+    {"SwapCached", "swapCached"},
+    {"SwapTotal", "swapTotal"},
+    {"SwapFree", "swapFree"},
+    {"AnonPages", "anonPages"},
+    {"PageTables", "pageTables"},
+    {"ShmemHugePages", "shmemHugePages"},
+    {"ShmemPmdMapped", "shmemPmdMapped"},
+    {"HugePages_Total", "hugePagesTotal"},
+    {"HugePages_Free", "hugePagesFree"},
+    {"HugePages_Rsvd", "hugePagesRsvd"},
+    {"HugePages_Surp", "hugePagesSurp"},
+    {"Hugepagesize", "hugePageSize"},
+    {"CommitLimit", "commitLimit"},
+    {"VmallocTotal", "vMallocTotal"},
+    {"VmallocUsed", "vMallocUsed"},
+    {"VmallocChunk", "vMallocChunk"}
+};
+
+Value getSysInfo(const CallbackInfo& info){
+    Env env = info.Env();
+    char line[255], fieldName[50];
+    unsigned int fieldValue;
+
+    auto fd = fopen("/proc/meminfo", "r");
+    if (fd == NULL) {
+        stringstream err;
+        err << "failed to open /proc/meminfo, error code: " << errno << endl;
+        Error::New(env, err.str()).ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    Object ret = Object::New(env);
+    while (fgets(line, sizeof(line), fd) != NULL) {
+        if (sscanf(line, "%s %u", &fieldName, &fieldValue) != 2) {
+            continue;
+        }
+        fieldName[strlen(fieldName) -1] = '\0';
+
+        if (procFields.find(fieldName) == procFields.end()) {
+            continue;
+        }
+        ret.Set(procFields.at(fieldName), fieldValue);
+    }
+    fclose(fd);
+
+    return ret;
+}
+
+#endif
 
 /*
  * Initialize Node.JS Binding exports
