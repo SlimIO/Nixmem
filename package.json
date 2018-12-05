@@ -7,12 +7,13 @@
     "node": ">=10"
   },
   "scripts": {
-    "build": "prebuildify --napi",
+    "prepublishOnly": "pkg-ok",
+    "prebuilds": "prebuildify --napi",
+    "build": "cross-env node-gyp configure && node-gyp build",
     "test": "ava --verbose",
-    "doc": "jsdoc -c ./jsdoc.json -r",
+    "doc": "jsdoc -c ./jsdoc.json -r -R ./README.md -P ./package.json --verbose",
     "coverage": "nyc ava",
-    "report": "nyc report --reporter=html",
-    "install": "node-gyp rebuild"
+    "report": "nyc report --reporter=html"
   },
   "repository": {
     "type": "git",
@@ -37,8 +38,10 @@
     "@slimio/eslint-config": "^2.0.3",
     "@types/node": "^10.10.1",
     "ava": "^0.25.0",
+    "cross-env": "^5.2.0",
     "eslint": "^5.6.0",
     "node-gyp": "^3.5.0",
-    "nyc": "^13.0.1"
+    "nyc": "^13.0.1",
+    "pkg-ok": "^2.3.1"
   }
 }
