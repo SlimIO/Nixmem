@@ -24,7 +24,14 @@
       "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
     }
   },
-  "keywords": [],
+  "keywords": [
+      "SlimIO",
+      "Monitoring",
+      "UNIX",
+      "Memory",
+      "Binding",
+      "NAPI"
+  ],
   "author": "SlimIO",
   "license": "MIT",
   "gypfile": true,
