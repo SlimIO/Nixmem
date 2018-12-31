@@ -25,12 +25,12 @@
     }
   },
   "keywords": [
-      "SlimIO",
-      "Monitoring",
-      "UNIX",
-      "Memory",
-      "Binding",
-      "NAPI"
+    "SlimIO",
+    "Monitoring",
+    "UNIX",
+    "Memory",
+    "Binding",
+    "NAPI"
   ],
   "author": "SlimIO",
   "license": "MIT",
