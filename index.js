@@ -4,10 +4,23 @@
  */
 const nixmem = require("node-gyp-build")(__dirname);
 
-nixmem.getSysInfo((err, ret) => {
-    if (err) {
-        return console.error(err);
-    }
+/**
+ * @function getSysInfo
+ * @memberof nixmem#
+ * @returns {Promise<Nixmem.MemInfo>}
+ */
+function getSysInfo() {
+    return new Promise((resolve, reject) => {
+        nixmem.getSysInfo((err, ret) => {
+            if (err) {
+                return reject(err);
+            }
 
-    return console.log(ret);
-});
+            return resolve(ret);
+        });
+    });
+}
+
+module.exports = {
+    getSysInfo
+};
