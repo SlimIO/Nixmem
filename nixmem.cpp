@@ -49,52 +49,91 @@ int sysInfo(const int firstLevel, const int secondLevel, void* info) {
 }
 
 /**
- * FreeBSD getSysInfo binding
+ * FreeBSD getSysInfo binding Worker
  */
-Value getSysInfo(const CallbackInfo& info){
-    Env env = info.Env();
-    struct vmtotal vm_info;
+class SysInfoWorker : public AsyncWorker {
+    public:
+        SysInfoWorker(Function& callback) : AsyncWorker(callback) {}
+        ~SysInfoWorker() {}
+    private:
+        struct vmtotal vm_info;
+        unsigned int NCPU;
+        long BYTEORDER;
+        long PHYSMEM;
+        long USERMEM;
+        long PAGESIZE;
+        long REALMEM;
+        bool SWAPPING_ENABLED;
+        long V_FREE_MIN;
+        long V_FREE_RESERVED;
+        long V_FREE_TARGET;
+        long V_INACTIVE_TARGET;
+        long V_PAGEOUT_FREE_MIN;
 
-    if (sysInfo(CTL_VM, VM_TOTAL, &vm_info) == -1) {
-        stringstream err;
-        err << "sysctl failed for CTL_VM.VM_TOTAL: " << errno << endl;
-        Error::New(env, err.str()).ThrowAsJavaScriptException();
-        return env.Null();
+    void Execute() {
+        if (sysInfo(CTL_VM, VM_TOTAL, &vm_info) == -1) {
+            SetError("sysctl failed for CTL_VM.VM_TOTAL");
+        }
+
+        NCPU = sysInfo<unsigned int>(CTL_HW, HW_NCPU);
+        BYTEORDER = sysInfo<long>(CTL_HW, HW_BYTEORDER);
+        PHYSMEM = sysInfo<long>(CTL_HW, HW_PHYSMEM);
+        USERMEM = sysInfo<long>(CTL_HW, HW_USERMEM);
+        PAGESIZE = sysInfo<long>(CTL_HW, HW_PAGESIZE);
+        REALMEM = sysInfo<long>(CTL_HW, HW_REALMEM);
+        SWAPPING_ENABLED = sysInfo<bool>(CTL_VM, VM_SWAPPING_ENABLED);
+        V_FREE_MIN = sysInfo<long>(CTL_VM, VM_V_FREE_MIN);
+        V_FREE_RESERVED = sysInfo<long>(CTL_VM, VM_V_FREE_RESERVED);
+        V_FREE_TARGET = sysInfo<long>(CTL_VM, VM_V_FREE_TARGET);
+        V_INACTIVE_TARGET = sysInfo<long>(CTL_VM, VM_V_INACTIVE_TARGET);
+        V_PAGEOUT_FREE_MIN = sysInfo<long>(CTL_VM, VM_V_PAGEOUT_FREE_MIN);
     }
 
-    Object vmtotal = Object::New(env);
-    vmtotal.Set("t_vm", vm_info.t_vm);
-    vmtotal.Set("t_avm", vm_info.t_avm);
-    vmtotal.Set("t_rm", vm_info.t_rm);
-    vmtotal.Set("t_arm", vm_info.t_arm);
-    vmtotal.Set("t_vmshr", vm_info.t_vmshr);
-    vmtotal.Set("t_avmshr", vm_info.t_avmshr);
-    vmtotal.Set("t_rmshr", vm_info.t_rmshr);
-    vmtotal.Set("t_armshr", vm_info.t_armshr);
-    vmtotal.Set("t_free", vm_info.t_free);
-    vmtotal.Set("t_rq", vm_info.t_rq);
-    vmtotal.Set("t_dw", vm_info.t_dw);
-    vmtotal.Set("t_pw", vm_info.t_pw);
-    vmtotal.Set("t_sl", vm_info.t_sl);
-    vmtotal.Set("t_sw", vm_info.t_sw);
+    void OnError(const Error& e) {
+        stringstream error;
+        error << e.what() << ", error code: " << errno << endl;
+        Error::New(Env(), error.str()).ThrowAsJavaScriptException();
+    }
 
-    Object ret = Object::New(env);
-    ret.Set("nCPU", sysInfo<unsigned int>(CTL_HW, HW_NCPU));
-    ret.Set("byteOrder", sysInfo<long>(CTL_HW, HW_BYTEORDER));
-    ret.Set("physMem", sysInfo<long>(CTL_HW, HW_PHYSMEM));
-    ret.Set("userMem", sysInfo<long>(CTL_HW, HW_USERMEM));
-    ret.Set("pageSize", sysInfo<long>(CTL_HW, HW_PAGESIZE));
-    ret.Set("realMem", sysInfo<long>(CTL_HW, HW_REALMEM));
-    ret.Set("vmtotal", vmtotal);
-    ret.Set("swapping_enable", sysInfo<bool>(CTL_VM, VM_SWAPPING_ENABLED));
-    ret.Set("vFreeMin", sysInfo<long>(CTL_VM, VM_V_FREE_MIN));
-    ret.Set("vFreeReserved", sysInfo<long>(CTL_VM, VM_V_FREE_RESERVED));
-    ret.Set("vFreeTarget", sysInfo<long>(CTL_VM, VM_V_FREE_TARGET));
-    ret.Set("vInactiveTarget", sysInfo<long>(CTL_VM, VM_V_INACTIVE_TARGET));
-    ret.Set("vPageoutFreeMin", sysInfo<long>(CTL_VM, VM_V_PAGEOUT_FREE_MIN));
+    void OnOK() {
+        HandleScope scope(Env());
 
-    return ret;
-}
+        Object vmtotal = Object::New(env);
+        vmtotal.Set("t_vm", vm_info.t_vm);
+        vmtotal.Set("t_avm", vm_info.t_avm);
+        vmtotal.Set("t_rm", vm_info.t_rm);
+        vmtotal.Set("t_arm", vm_info.t_arm);
+        vmtotal.Set("t_vmshr", vm_info.t_vmshr);
+        vmtotal.Set("t_avmshr", vm_info.t_avmshr);
+        vmtotal.Set("t_rmshr", vm_info.t_rmshr);
+        vmtotal.Set("t_armshr", vm_info.t_armshr);
+        vmtotal.Set("t_free", vm_info.t_free);
+        vmtotal.Set("t_rq", vm_info.t_rq);
+        vmtotal.Set("t_dw", vm_info.t_dw);
+        vmtotal.Set("t_pw", vm_info.t_pw);
+        vmtotal.Set("t_sl", vm_info.t_sl);
+        vmtotal.Set("t_sw", vm_info.t_sw);
+
+        Object ret = Object::New(env);
+        ret.Set("vmtotal", vmtotal);
+
+        ret.Set("nCPU", NCPU);
+        ret.Set("byteOrder", BYTEORDER);
+        ret.Set("physMem", PHYSMEM);
+        ret.Set("userMem", USERMEM);
+        ret.Set("pageSize", PAGESIZE);
+        ret.Set("realMem", REALMEM);
+        ret.Set("swapping_enable", SWAPPING_ENABLED);
+        ret.Set("vFreeMin", V_FREE_MIN);
+        ret.Set("vFreeReserved", V_FREE_RESERVED);
+        ret.Set("vFreeTarget", V_FREE_TARGET);
+        ret.Set("vInactiveTarget", _INACTIVE_TARGET);
+        ret.Set("vPageoutFreeMin", V_PAGEOUT_FREE_MIN);
+
+        Callback().Call({Env().Null(), ret});
+    }
+};
+
 #else
 
 /**
@@ -133,39 +172,81 @@ map<const char*, const char*, cmp_str> procFields = {
 };
 
 /**
- * Linux getSysInfo binding
+ * Linux getSysInfo binding worker
  * 
  * @doc: https://access.redhat.com/solutions/406773
  * @doc: https://www.centos.org/docs/5/html/5.1/Deployment_Guide/s2-proc-meminfo.html
  * @doc: https://superuser.com/questions/521551/cat-proc-meminfo-what-do-all-those-numbers-mean
  */
+class SysInfoWorker : public AsyncWorker {
+    public:
+        SysInfoWorker(Function& callback) : AsyncWorker(callback) {}
+        ~SysInfoWorker() {}
+    private:
+        struct MemInfoEntry {
+            const char* key;
+            unsigned int value;
+        };
+        vector<MemInfoEntry> memoryEntries;
+
+    void Execute() {
+        char line[255], fieldName[50];
+        unsigned int fieldValue;
+
+        auto fd = fopen("/proc/meminfo", "r");
+        if (fd == NULL) {
+            SetError("failed to open /proc/meminfo");
+        }
+
+        while (fgets(line, sizeof(line), fd) != NULL) {
+            if (sscanf(line, "%s %u", (char*) &fieldName, &fieldValue) == 2) {
+                if (procFields.find(fieldName) != procFields.end()) {
+                    memoryEntries.push_back(MemInfoEntry{ procFields.at(fieldName), fieldValue });
+                }
+            }
+        }
+        fclose(fd);
+    }
+
+    void OnError(const Error& e) {
+        stringstream error;
+        error << e.what() << ", error code: " << errno << endl;
+        Error::New(Env(), error.str()).ThrowAsJavaScriptException();
+    }
+
+    void OnOK() {
+        HandleScope scope(Env());
+
+        Object ret = Object::New(Env());
+        for(size_t i = 0; i < memoryEntries.size(); i++) {
+            ret.Set(memoryEntries[i].key, memoryEntries[i].value);
+        }
+        Callback().Call({Env().Null(), ret});
+    }
+};
+
+#endif
+
 Value getSysInfo(const CallbackInfo& info){
     Env env = info.Env();
-    char line[255], fieldName[50];
-    unsigned int fieldValue;
 
-    auto fd = fopen("/proc/meminfo", "r");
-    if (fd == NULL) {
-        stringstream err;
-        err << "failed to open /proc/meminfo, error code: " << errno << endl;
-        Error::New(env, err.str()).ThrowAsJavaScriptException();
+    // Check argument length!
+    if (info.Length() < 1) {
+        Error::New(env, "Wrong number of argument provided!").ThrowAsJavaScriptException();
         return env.Null();
     }
 
-    Object ret = Object::New(env);
-    while (fgets(line, sizeof(line), fd) != NULL) {
-        if (sscanf(line, "%s %u", &fieldName, &fieldValue) == 2) {
-            if (procFields.find(fieldName) != procFields.end()) {
-                ret.Set(procFields.at(fieldName), fieldValue);
-            }
-        }
+    // callback should be a Napi::Function
+    if (!info[0].IsFunction()) {
+        Error::New(env, "argument callback should be a Function!").ThrowAsJavaScriptException();
+        return env.Null();
     }
-    fclose(fd);
 
-    return ret;
+    Function cb = info[0].As<Function>();
+    (new SysInfoWorker(cb))->Queue();
+    
+    return env.Undefined();
 }
-
-#endif
 
 /*
  * Initialize Node.JS Binding exports
