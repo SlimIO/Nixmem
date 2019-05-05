@@ -62,9 +62,9 @@ typings/
 
 # JSDoc
 docs/
-
-build
+jsdoc/
+build/
 prebuilds/
 .exe
 .obj
-.vscode
+.vscode/
