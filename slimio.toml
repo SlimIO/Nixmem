@@ -1,3 +1,4 @@
 name = "nixmem"
 version = "1.0.0"
+platform = "Unix"
 type = "NAPI"
