@@ -1,6 +1,8 @@
+"use strict";
+
 /**
  * @namespace nixmem
- * @desc UNIX Memory
+ * @description UNIX Memory
  */
 const nixmem = require("node-gyp-build")(__dirname);
 
