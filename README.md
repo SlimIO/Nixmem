@@ -11,7 +11,7 @@ SlimIO Nixmem is a Node.js binding which bring information about memory consumpt
 | ✔️ | ✔️ | ✔️ |
 
 ## Requirements
-- Node.js v10 or higher
+- [Node.js](https://nodejs.org/en/) v10 or higher
 - UNIX system.
 
 ## Getting Started
