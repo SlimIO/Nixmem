@@ -7,6 +7,7 @@
 ![dep](https://img.shields.io/david/SlimIO/Nixmem)
 ![size](https://img.shields.io/github/repo-size/SlimIO/Nixmem)
 [![Known Vulnerabilities](https://snyk.io//test/github/SlimIO/Nixmem/badge.svg?targetFile=package.json)](https://snyk.io//test/github/SlimIO/Nixmem?targetFile=package.json)
+[![Build Status](https://travis-ci.com/SlimIO/Nixmem.svg?branch=master)](https://travis-ci.com/SlimIO/Nixmem)
 
 SlimIO Nixmem is a Node.js binding which bring information about memory consumption. This module has been designed for UNIX systems (For windows please take a look at [Winmem](https://github.com/SlimIO/Winmem)).
 
