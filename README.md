@@ -3,7 +3,7 @@
 ![N-API](https://img.shields.io/badge/N--API-experimental-orange.svg)
 ![version](https://img.shields.io/badge/dynamic/json.svg?url=https://raw.githubusercontent.com/SlimIO/Nixmem/master/package.json&query=$.version&label=Version)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/SlimIO/Nixmem/commit-activity)
-[![GitHub license](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/SlimIO/Nixmem/blob/master/LICENSE)
+[![mit](https://img.shields.io/github/license/Naereen/StrapDown.js.svg)](https://github.com/SlimIO/Nixmem/blob/master/LICENSE)
 ![dep](https://img.shields.io/david/SlimIO/Nixmem)
 ![size](https://img.shields.io/github/repo-size/SlimIO/Nixmem)
 [![Known Vulnerabilities](https://snyk.io//test/github/SlimIO/Nixmem/badge.svg?targetFile=package.json)](https://snyk.io//test/github/SlimIO/Nixmem?targetFile=package.json)
