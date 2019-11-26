@@ -36,10 +36,9 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "include/*.h",
+    "include",
     "binding.gyp",
-    "nixmem.cpp",
-    "src"
+    "nixmem.cpp"
   ],
   "author": "SlimIO",
   "license": "MIT",
