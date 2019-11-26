@@ -4,7 +4,7 @@
   "description": "UNIX Memory - Node.JS low level binding",
   "main": "index.js",
   "engines": {
-    "node": ">=10"
+    "node": ">=12"
   },
   "scripts": {
     "prepublishOnly": "pkg-ok",
