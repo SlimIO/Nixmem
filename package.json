@@ -49,7 +49,7 @@
   "homepage": "https://github.com/SlimIO/Nixmem#readme",
   "dependencies": {
     "node-addon-api": "^1.7.1",
-    "node-gyp-build": "^4.1.0"
+    "node-gyp-build": "^4.2.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^8.0.0",
