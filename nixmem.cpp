@@ -13,9 +13,6 @@
 #include <sys/sysinfo.h>
 #endif
 
-using namespace std;
-using namespace Napi;
-
 #if __FreeBSD__
 
 /**
@@ -51,9 +48,9 @@ int sysInfo(const int firstLevel, const int secondLevel, void* info) {
 /**
  * FreeBSD getSysInfo binding Worker
  */
-class SysInfoWorker : public AsyncWorker {
+class SysInfoWorker : public Napi::AsyncWorker {
     public:
-        SysInfoWorker(Function& callback) : AsyncWorker(callback) {}
+        SysInfoWorker(Napi::Function& callback) : AsyncWorker(callback) {}
         ~SysInfoWorker() {}
     private:
         struct vmtotal vm_info;
@@ -89,16 +86,17 @@ class SysInfoWorker : public AsyncWorker {
         V_PAGEOUT_FREE_MIN = sysInfo<long>(CTL_VM, VM_V_PAGEOUT_FREE_MIN);
     }
 
-    void OnError(const Error& e) {
-        stringstream error;
-        error << e.what() << ", error code: " << errno << endl;
-        Error::New(Env(), error.str()).ThrowAsJavaScriptException();
+    void OnError(const Napi::Error& e) {
+        std::stringstream error;
+        error << e.what() << ", error code: " << errno << std::endl;
+        Napi::Error::New(Env(), error.str()).ThrowAsJavaScriptException();
     }
 
     void OnOK() {
-        HandleScope scope(Env());
+        Napi::HandleScope scope(Env());
+        Napi::Object vmtotal = Napi::Object::New(env);
+        Napi::Object ret = Napi::Object::New(env);
 
-        Object vmtotal = Object::New(env);
         vmtotal.Set("t_vm", vm_info.t_vm);
         vmtotal.Set("t_avm", vm_info.t_avm);
         vmtotal.Set("t_rm", vm_info.t_rm);
@@ -114,9 +112,7 @@ class SysInfoWorker : public AsyncWorker {
         vmtotal.Set("t_sl", vm_info.t_sl);
         vmtotal.Set("t_sw", vm_info.t_sw);
 
-        Object ret = Object::New(env);
         ret.Set("vmtotal", vmtotal);
-
         ret.Set("nCPU", NCPU);
         ret.Set("byteOrder", BYTEORDER);
         ret.Set("physMem", PHYSMEM);
@@ -136,9 +132,6 @@ class SysInfoWorker : public AsyncWorker {
 
 #else
 
-/**
- * String comparator by value
- */
 struct cmp_str {
    bool operator()(char const *a, char const *b){
       return strcmp(a, b) < 0;
@@ -148,7 +141,7 @@ struct cmp_str {
 /**
  * All possible proc fields
  */
-map<const char*, const char*, cmp_str> procFields = {
+std::map<const char*, const char*, cmp_str> procFields = {
     {"MemTotal:", "memTotal"},
     {"MemFree:", "memFree"},
     {"MemShared:", "memShared"},
@@ -178,16 +171,16 @@ map<const char*, const char*, cmp_str> procFields = {
  * @doc: https://www.centos.org/docs/5/html/5.1/Deployment_Guide/s2-proc-meminfo.html
  * @doc: https://superuser.com/questions/521551/cat-proc-meminfo-what-do-all-those-numbers-mean
  */
-class SysInfoWorker : public AsyncWorker {
+class SysInfoWorker : public Napi::AsyncWorker {
     public:
-        SysInfoWorker(Function& callback) : AsyncWorker(callback) {}
+        SysInfoWorker(Napi::Function& callback) : AsyncWorker(callback) {}
         ~SysInfoWorker() {}
     private:
         struct MemInfoEntry {
             const char* key;
             unsigned int value;
         };
-        vector<MemInfoEntry> memoryEntries;
+        std::vector<MemInfoEntry> memoryEntries;
 
     void Execute() {
         char line[255], fieldName[50];
@@ -208,16 +201,16 @@ class SysInfoWorker : public AsyncWorker {
         fclose(fd);
     }
 
-    void OnError(const Error& e) {
-        stringstream error;
-        error << e.what() << ", error code: " << errno << endl;
-        Error::New(Env(), error.str()).ThrowAsJavaScriptException();
+    void OnError(const Napi::Error& e) {
+        std::stringstream error;
+        error << e.what() << ", error code: " << errno << std::endl;
+        Napi::Error::New(Env(), error.str()).ThrowAsJavaScriptException();
     }
 
     void OnOK() {
-        HandleScope scope(Env());
+        Napi::HandleScope scope(Env());
+        Napi::Object ret = Napi::Object::New(Env());
 
-        Object ret = Object::New(Env());
         for(size_t i = 0; i < memoryEntries.size(); i++) {
             ret.Set(memoryEntries[i].key, memoryEntries[i].value);
         }
@@ -227,37 +220,29 @@ class SysInfoWorker : public AsyncWorker {
 
 #endif
 
-Value getSysInfo(const CallbackInfo& info){
-    Env env = info.Env();
+Napi::Value getSysInfo(const Napi::CallbackInfo& info){
+    Napi::Env env = info.Env();
+    Napi::Function cb;
 
-    // Check argument length!
     if (info.Length() < 1) {
-        Error::New(env, "Wrong number of argument provided!").ThrowAsJavaScriptException();
+        Napi::Error::New(env, "Wrong number of argument provided!").ThrowAsJavaScriptException();
         return env.Null();
     }
-
-    // callback should be a Napi::Function
     if (!info[0].IsFunction()) {
-        Error::New(env, "argument callback should be a Function!").ThrowAsJavaScriptException();
+        Napi::Error::New(env, "argument callback should be a Function!").ThrowAsJavaScriptException();
         return env.Null();
     }
 
-    Function cb = info[0].As<Function>();
+    cb = info[0].As<Napi::Function>();
     (new SysInfoWorker(cb))->Queue();
     
     return env.Undefined();
 }
 
-/*
- * Initialize Node.JS Binding exports
- * 
- * @header: napi.h
- */
-Object Init(Env env, Object exports) {
-    exports.Set("getSysInfo", Function::New(env, getSysInfo));
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    exports.Set("getSysInfo", Napi::Function::New(env, getSysInfo));
 
     return exports;
 }
 
-// Export
 NODE_API_MODULE(Nixmem, Init)
