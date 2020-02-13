@@ -48,7 +48,7 @@
   },
   "homepage": "https://github.com/SlimIO/Nixmem#readme",
   "dependencies": {
-    "node-addon-api": "^1.7.1",
+    "node-addon-api": "^2.0.0",
     "node-gyp-build": "^4.2.0"
   },
   "devDependencies": {
