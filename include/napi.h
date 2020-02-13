@@ -1,9 +1,11 @@
 #ifndef SRC_NAPI_H_
 #define SRC_NAPI_H_
 
-#include "node_api.h"
+#include <node_api.h>
 #include <functional>
 #include <initializer_list>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -38,6 +40,64 @@ static_assert(sizeof(char16_t) == sizeof(wchar_t), "Size mismatch between char16
   #define NAPI_NOEXCEPT noexcept
 #endif
 
+#ifdef NAPI_CPP_EXCEPTIONS
+
+// When C++ exceptions are enabled, Errors are thrown directly. There is no need
+// to return anything after the throw statements. The variadic parameter is an
+// optional return value that is ignored.
+// We need _VOID versions of the macros to avoid warnings resulting from
+// leaving the NAPI_THROW_* `...` argument empty.
+
+#define NAPI_THROW(e, ...)  throw e
+#define NAPI_THROW_VOID(e)  throw e
+
+#define NAPI_THROW_IF_FAILED(env, status, ...)           \
+  if ((status) != napi_ok) throw Napi::Error::New(env);
+
+#define NAPI_THROW_IF_FAILED_VOID(env, status)           \
+  if ((status) != napi_ok) throw Napi::Error::New(env);
+
+#else // NAPI_CPP_EXCEPTIONS
+
+// When C++ exceptions are disabled, Errors are thrown as JavaScript exceptions,
+// which are pending until the callback returns to JS.  The variadic parameter
+// is an optional return value; usually it is an empty result.
+// We need _VOID versions of the macros to avoid warnings resulting from
+// leaving the NAPI_THROW_* `...` argument empty.
+
+#define NAPI_THROW(e, ...)                               \
+  do {                                                   \
+    (e).ThrowAsJavaScriptException();                    \
+    return __VA_ARGS__;                                  \
+  } while (0)
+
+#define NAPI_THROW_VOID(e)                               \
+  do {                                                   \
+    (e).ThrowAsJavaScriptException();                    \
+    return;                                              \
+  } while (0)
+
+#define NAPI_THROW_IF_FAILED(env, status, ...)           \
+  if ((status) != napi_ok) {                             \
+    Napi::Error::New(env).ThrowAsJavaScriptException();  \
+    return __VA_ARGS__;                                  \
+  }
+
+#define NAPI_THROW_IF_FAILED_VOID(env, status)           \
+  if ((status) != napi_ok) {                             \
+    Napi::Error::New(env).ThrowAsJavaScriptException();  \
+    return;                                              \
+  }
+
+#endif // NAPI_CPP_EXCEPTIONS
+
+#define NAPI_FATAL_IF_FAILED(status, location, message)  \
+  do {                                                   \
+    if ((status) != napi_ok) {                           \
+      Napi::Error::Fatal((location), (message));         \
+    }                                                    \
+  } while (0)
+
 ////////////////////////////////////////////////////////////////////////////////
 /// N-API C++ Wrapper Classes
 ///
@@ -52,6 +112,15 @@ namespace Napi {
   class Value;
   class Boolean;
   class Number;
+// Currently experimental guard with the definition of NAPI_EXPERIMENTAL.
+// Once it is no longer experimental guard with the NAPI_VERSION in which it is
+// released instead.
+#ifdef NAPI_EXPERIMENTAL
+  class BigInt;
+#endif  // NAPI_EXPERIMENTAL
+#if (NAPI_VERSION > 4)
+  class Date;
+#endif
   class String;
   class Object;
   class Array;
@@ -72,6 +141,13 @@ namespace Napi {
   typedef TypedArrayOf<uint32_t> Uint32Array; ///< Typed-array of unsigned 32-bit integers
   typedef TypedArrayOf<float> Float32Array;   ///< Typed-array of 32-bit floating-point values
   typedef TypedArrayOf<double> Float64Array;  ///< Typed-array of 64-bit floating-point values
+// Currently experimental guard with the definition of NAPI_EXPERIMENTAL.
+// Once it is no longer experimental guard with the NAPI_VERSION in which it is
+// released instead.
+#ifdef NAPI_EXPERIMENTAL
+  typedef TypedArrayOf<int64_t> BigInt64Array;   ///< Typed array of signed 64-bit integers
+  typedef TypedArrayOf<uint64_t> BigUint64Array; ///< Typed array of unsigned 64-bit integers
+#endif  // NAPI_EXPERIMENTAL
 
   /// Defines the signature of a N-API C++ module's registration callback (init) function.
   typedef Object (*ModuleRegisterCallback)(Env env, Object exports);
@@ -171,6 +247,15 @@ namespace Napi {
     bool IsNull() const;        ///< Tests if a value is a null JavaScript value.
     bool IsBoolean() const;     ///< Tests if a value is a JavaScript boolean.
     bool IsNumber() const;      ///< Tests if a value is a JavaScript number.
+// Currently experimental guard with the definition of NAPI_EXPERIMENTAL.
+// Once it is no longer experimental guard with the NAPI_VERSION in which it is
+// released instead.
+#ifdef NAPI_EXPERIMENTAL
+    bool IsBigInt() const;      ///< Tests if a value is a JavaScript bigint.
+#endif  // NAPI_EXPERIMENTAL
+#if (NAPI_VERSION > 4)
+    bool IsDate() const;        ///< Tests if a value is a JavaScript date.
+#endif
     bool IsString() const;      ///< Tests if a value is a JavaScript string.
     bool IsSymbol() const;      ///< Tests if a value is a JavaScript symbol.
     bool IsArray() const;       ///< Tests if a value is a JavaScript array.
@@ -179,9 +264,7 @@ namespace Napi {
     bool IsObject() const;      ///< Tests if a value is a JavaScript object.
     bool IsFunction() const;    ///< Tests if a value is a JavaScript function.
     bool IsPromise() const;     ///< Tests if a value is a JavaScript promise.
-#if NAPI_DATA_VIEW_FEATURE
     bool IsDataView() const;    ///< Tests if a value is a JavaScript data view.
-#endif
     bool IsBuffer() const;      ///< Tests if a value is a Node buffer.
     bool IsExternal() const;    ///< Tests if a value is a pointer to external data.
 
@@ -241,6 +324,68 @@ namespace Napi {
     float FloatValue() const;     ///< Converts a Number value to a 32-bit floating-point value.
     double DoubleValue() const;   ///< Converts a Number value to a 64-bit floating-point value.
   };
+
+// Currently experimental guard with the definition of NAPI_EXPERIMENTAL.
+// Once it is no longer experimental guard with the NAPI_VERSION in which it is
+// released instead.
+#ifdef NAPI_EXPERIMENTAL
+  /// A JavaScript bigint value.
+  class BigInt : public Value {
+  public:
+    static BigInt New(
+      napi_env env, ///< N-API environment
+      int64_t value ///< Number value
+    );
+    static BigInt New(
+      napi_env env,  ///< N-API environment
+      uint64_t value ///< Number value
+    );
+
+    /// Creates a new BigInt object using a specified sign bit and a
+    /// specified list of digits/words.
+    /// The resulting number is calculated as:
+    /// (-1)^sign_bit * (words[0] * (2^64)^0 + words[1] * (2^64)^1 + ...)
+    static BigInt New(
+      napi_env env,          ///< N-API environment
+      int sign_bit,          ///< Sign bit. 1 if negative.
+      size_t word_count,     ///< Number of words in array
+      const uint64_t* words  ///< Array of words
+    );
+
+    BigInt();                               ///< Creates a new _empty_ BigInt instance.
+    BigInt(napi_env env, napi_value value); ///< Wraps a N-API value primitive.
+
+    int64_t Int64Value(bool* lossless) const;   ///< Converts a BigInt value to a 64-bit signed integer value.
+    uint64_t Uint64Value(bool* lossless) const; ///< Converts a BigInt value to a 64-bit unsigned integer value.
+
+    size_t WordCount() const; ///< The number of 64-bit words needed to store the result of ToWords().
+
+    /// Writes the contents of this BigInt to a specified memory location.
+    /// `sign_bit` must be provided and will be set to 1 if this BigInt is negative.
+    /// `*word_count` has to be initialized to the length of the `words` array.
+    /// Upon return, it will be set to the actual number of words that would
+    /// be needed to store this BigInt (i.e. the return value of `WordCount()`).
+    void ToWords(int* sign_bit, size_t* word_count, uint64_t* words);
+  };
+#endif  // NAPI_EXPERIMENTAL
+
+#if (NAPI_VERSION > 4)
+  /// A JavaScript date value.
+  class Date : public Value {
+  public:
+    /// Creates a new Date value from a double primitive.
+    static Date New(
+      napi_env env, ///< N-API environment
+      double value  ///< Number value
+    );
+
+    Date();                               ///< Creates a new _empty_ Date instance.
+    Date(napi_env env, napi_value value); ///< Wraps a N-API value primitive.
+    operator double() const;              ///< Converts a Date value to double primitive
+
+    double ValueOf() const;   ///< Converts a Date value to a double primitive.
+  };
+  #endif
 
   /// A JavaScript string or symbol value (that can be used as a property name).
   class Name : public Value {
@@ -544,7 +689,7 @@ namespace Napi {
       uint32_t index ///< Property / element index
     );
 
-    Array GetPropertyNames(); ///< Get all property names
+    Array GetPropertyNames() const; ///< Get all property names
 
     /// Defines a property on the object.
     void DefineProperty(
@@ -569,6 +714,14 @@ namespace Napi {
     bool InstanceOf(
       const Function& constructor ///< Constructor function
     ) const;
+
+    template <typename Finalizer, typename T>
+    inline void AddFinalizer(Finalizer finalizeCallback, T* data);
+
+    template <typename Finalizer, typename T, typename Hint>
+    inline void AddFinalizer(Finalizer finalizeCallback,
+                             T* data,
+                             Hint* finalizeHint);
   };
 
   template <typename T>
@@ -576,12 +729,12 @@ namespace Napi {
   public:
     static External New(napi_env env, T* data);
 
-    // Finalizer must implement operator() accepting a T* and returning void.
+    // Finalizer must implement `void operator()(Env env, T* data)`.
     template <typename Finalizer>
     static External New(napi_env env,
                         T* data,
                         Finalizer finalizeCallback);
-    // Finalizer must implement operator() accepting a T* and Hint* and returning void.
+    // Finalizer must implement `void operator()(Env env, T* data, Hint* hint)`.
     template <typename Finalizer, typename Hint>
     static External New(napi_env env,
                         T* data,
@@ -629,8 +782,7 @@ namespace Napi {
       size_t byteLength,         ///< Length of the external buffer to be used by the array,
                                  ///  in bytes
       Finalizer finalizeCallback ///< Function to be called when the array buffer is destroyed;
-                                 ///  must implement `operator()`, accept a `void*` (which is the
-                                 ///  data buffer pointer), and return `void`
+                                 ///  must implement `void operator()(Env env, void* externalData)`
     );
 
     /// Creates a new ArrayBuffer instance, using an external buffer with specified byte length.
@@ -641,8 +793,7 @@ namespace Napi {
       size_t byteLength,          ///< Length of the external buffer to be used by the array,
                                   ///  in bytes
       Finalizer finalizeCallback, ///< Function to be called when the array buffer is destroyed;
-                                  ///  must implement `operator()`, accept a `void*` (which is the
-                                  ///  data buffer pointer) and `Hint*`, and return `void`
+                                  ///  must implement `void operator()(Env env, void* externalData, Hint* hint)`
       Hint* finalizeHint          ///< Hint (second parameter) to be passed to the finalize callback
     );
 
@@ -705,6 +856,13 @@ namespace Napi {
         : std::is_same<T, uint32_t>::value ? napi_uint32_array
         : std::is_same<T, float>::value ? napi_float32_array
         : std::is_same<T, double>::value ? napi_float64_array
+// Currently experimental guard with the definition of NAPI_EXPERIMENTAL.
+// Once it is no longer experimental guard with the NAPI_VERSION in which it is
+// released instead.
+#ifdef NAPI_EXPERIMENTAL
+        : std::is_same<T, int64_t>::value ? napi_bigint64_array
+        : std::is_same<T, uint64_t>::value ? napi_biguint64_array
+#endif  // NAPI_EXPERIMENTAL
         : unknown_array_type;
     }
     /// !endcond
@@ -781,7 +939,6 @@ namespace Napi {
                  T* data);
   };
 
-#if NAPI_DATA_VIEW_FEATURE
   /// The DataView provides a low-level interface for reading/writing multiple
   /// number types in an ArrayBuffer irrespective of the platform's endianness.
   class DataView : public Object {
@@ -833,7 +990,6 @@ namespace Napi {
     void* _data;
     size_t _length;
   };
-#endif
 
   class Function : public Object {
   public:
@@ -864,9 +1020,16 @@ namespace Napi {
     Value Call(napi_value recv, const std::vector<napi_value>& args) const;
     Value Call(napi_value recv, size_t argc, const napi_value* args) const;
 
-    Value MakeCallback(napi_value recv, const std::initializer_list<napi_value>& args) const;
-    Value MakeCallback(napi_value recv, const std::vector<napi_value>& args) const;
-    Value MakeCallback(napi_value recv, size_t argc, const napi_value* args) const;
+    Value MakeCallback(napi_value recv,
+                       const std::initializer_list<napi_value>& args,
+                       napi_async_context context = nullptr) const;
+    Value MakeCallback(napi_value recv,
+                       const std::vector<napi_value>& args,
+                       napi_async_context context = nullptr) const;
+    Value MakeCallback(napi_value recv,
+                       size_t argc,
+                       const napi_value* args,
+                       napi_async_context context = nullptr) const;
 
     Object New(const std::initializer_list<napi_value>& args) const;
     Object New(const std::vector<napi_value>& args) const;
@@ -881,6 +1044,7 @@ namespace Napi {
       Deferred(napi_env env);
 
       Napi::Promise Promise() const;
+      Napi::Env Env() const;
 
       void Resolve(napi_value value) const;
       void Reject(napi_value value) const;
@@ -900,12 +1064,12 @@ namespace Napi {
     static Buffer<T> New(napi_env env, size_t length);
     static Buffer<T> New(napi_env env, T* data, size_t length);
 
-    // Finalizer must implement operator() accepting a T* and returning void.
+    // Finalizer must implement `void operator()(Env env, T* data)`.
     template <typename Finalizer>
     static Buffer<T> New(napi_env env, T* data,
                          size_t length,
                          Finalizer finalizeCallback);
-    // Finalizer must implement operator() accepting a T* and Hint* and returning void.
+    // Finalizer must implement `void operator()(Env env, T* data, Hint* hint)`.
     template <typename Finalizer, typename Hint>
     static Buffer<T> New(napi_env env, T* data,
                          size_t length,
@@ -1035,9 +1199,18 @@ namespace Napi {
     Napi::Value Call(const std::vector<napi_value>& args) const;
     Napi::Value Call(napi_value recv, const std::initializer_list<napi_value>& args) const;
     Napi::Value Call(napi_value recv, const std::vector<napi_value>& args) const;
+    Napi::Value Call(napi_value recv, size_t argc, const napi_value* args) const;
 
-    Napi::Value MakeCallback(napi_value recv, const std::initializer_list<napi_value>& args) const;
-    Napi::Value MakeCallback(napi_value recv, const std::vector<napi_value>& args) const;
+    Napi::Value MakeCallback(napi_value recv,
+                             const std::initializer_list<napi_value>& args,
+                             napi_async_context context = nullptr) const;
+    Napi::Value MakeCallback(napi_value recv,
+                             const std::vector<napi_value>& args,
+                             napi_async_context context = nullptr) const;
+    Napi::Value MakeCallback(napi_value recv,
+                             size_t argc,
+                             const napi_value* args,
+                             napi_async_context context = nullptr) const;
 
     Object New(const std::initializer_list<napi_value>& args) const;
     Object New(const std::vector<napi_value>& args) const;
@@ -1234,6 +1407,7 @@ namespace Napi {
 
   class PropertyDescriptor {
   public:
+#ifndef NODE_ADDON_API_DISABLE_DEPRECATED
     template <typename Getter>
     static PropertyDescriptor Accessor(const char* utf8name,
                                        Getter getter,
@@ -1298,6 +1472,74 @@ namespace Napi {
                                        Callable cb,
                                        napi_property_attributes attributes = napi_default,
                                        void* data = nullptr);
+#endif // !NODE_ADDON_API_DISABLE_DEPRECATED
+
+    template <typename Getter>
+    static PropertyDescriptor Accessor(Napi::Env env,
+                                       Napi::Object object,
+                                       const char* utf8name,
+                                       Getter getter,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Getter>
+    static PropertyDescriptor Accessor(Napi::Env env,
+                                       Napi::Object object,
+                                       const std::string& utf8name,
+                                       Getter getter,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Getter>
+    static PropertyDescriptor Accessor(Napi::Env env,
+                                       Napi::Object object,
+                                       Name name,
+                                       Getter getter,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Getter, typename Setter>
+    static PropertyDescriptor Accessor(Napi::Env env,
+                                       Napi::Object object,
+                                       const char* utf8name,
+                                       Getter getter,
+                                       Setter setter,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Getter, typename Setter>
+    static PropertyDescriptor Accessor(Napi::Env env,
+                                       Napi::Object object,
+                                       const std::string& utf8name,
+                                       Getter getter,
+                                       Setter setter,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Getter, typename Setter>
+    static PropertyDescriptor Accessor(Napi::Env env,
+                                       Napi::Object object,
+                                       Name name,
+                                       Getter getter,
+                                       Setter setter,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Callable>
+    static PropertyDescriptor Function(Napi::Env env,
+                                       Napi::Object object,
+                                       const char* utf8name,
+                                       Callable cb,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Callable>
+    static PropertyDescriptor Function(Napi::Env env,
+                                       Napi::Object object,
+                                       const std::string& utf8name,
+                                       Callable cb,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
+    template <typename Callable>
+    static PropertyDescriptor Function(Napi::Env env,
+                                       Napi::Object object,
+                                       Name name,
+                                       Callable cb,
+                                       napi_property_attributes attributes = napi_default,
+                                       void* data = nullptr);
     static PropertyDescriptor Value(const char* utf8name,
                                     napi_value value,
                                     napi_property_attributes attributes = napi_default);
@@ -1351,8 +1593,8 @@ namespace Napi {
   ///       public:
   ///         static void Initialize(Napi::Env& env, Napi::Object& target) {
   ///           Napi::Function constructor = DefineClass(env, "Example", {
-  ///             InstanceAccessor("value", &GetSomething, &SetSomething),
-  ///             InstanceMethod("doSomething", &DoSomething),
+  ///             InstanceAccessor("value", &Example::GetSomething, &Example::SetSomething),
+  ///             InstanceMethod("doSomething", &Example::DoSomething),
   ///           });
   ///           target.Set("Example", constructor);
   ///         }
@@ -1366,6 +1608,7 @@ namespace Napi {
   class ObjectWrap : public Reference<Object> {
   public:
     ObjectWrap(const CallbackInfo& callbackInfo);
+    virtual ~ObjectWrap();
 
     static T* Unwrap(Object wrapper);
 
@@ -1397,7 +1640,20 @@ namespace Napi {
                                            StaticMethodCallback method,
                                            napi_property_attributes attributes = napi_default,
                                            void* data = nullptr);
+    static PropertyDescriptor StaticMethod(Symbol name,
+                                           StaticVoidMethodCallback method,
+                                           napi_property_attributes attributes = napi_default,
+                                           void* data = nullptr);
+    static PropertyDescriptor StaticMethod(Symbol name,
+                                           StaticMethodCallback method,
+                                           napi_property_attributes attributes = napi_default,
+                                           void* data = nullptr);
     static PropertyDescriptor StaticAccessor(const char* utf8name,
+                                             StaticGetterCallback getter,
+                                             StaticSetterCallback setter,
+                                             napi_property_attributes attributes = napi_default,
+                                             void* data = nullptr);
+    static PropertyDescriptor StaticAccessor(Symbol name,
                                              StaticGetterCallback getter,
                                              StaticSetterCallback setter,
                                              napi_property_attributes attributes = napi_default,
@@ -1423,12 +1679,24 @@ namespace Napi {
                                                InstanceSetterCallback setter,
                                                napi_property_attributes attributes = napi_default,
                                                void* data = nullptr);
+    static PropertyDescriptor InstanceAccessor(Symbol name,
+                                               InstanceGetterCallback getter,
+                                               InstanceSetterCallback setter,
+                                               napi_property_attributes attributes = napi_default,
+                                               void* data = nullptr);
     static PropertyDescriptor StaticValue(const char* utf8name,
+                                          Napi::Value value,
+                                          napi_property_attributes attributes = napi_default);
+    static PropertyDescriptor StaticValue(Symbol name,
                                           Napi::Value value,
                                           napi_property_attributes attributes = napi_default);
     static PropertyDescriptor InstanceValue(const char* utf8name,
                                             Napi::Value value,
                                             napi_property_attributes attributes = napi_default);
+    static PropertyDescriptor InstanceValue(Symbol name,
+                                            Napi::Value value,
+                                            napi_property_attributes attributes = napi_default);
+    virtual void Finalize(Napi::Env env);
 
   private:
     static napi_value ConstructorCallbackWrapper(napi_env env, napi_callback_info info);
@@ -1441,6 +1709,11 @@ namespace Napi {
     static napi_value InstanceGetterCallbackWrapper(napi_env env, napi_callback_info info);
     static napi_value InstanceSetterCallbackWrapper(napi_env env, napi_callback_info info);
     static void FinalizeCallback(napi_env env, void* data, void* hint);
+    static Function DefineClass(Napi::Env env,
+                                const char* utf8name,
+                                const size_t props_count,
+                                const napi_property_descriptor* props,
+                                void* data = nullptr);
 
     template <typename TCallback>
     struct MethodCallbackData {
@@ -1470,6 +1743,10 @@ namespace Napi {
     explicit HandleScope(Napi::Env env);
     ~HandleScope();
 
+    // Disallow copying to prevent double close of napi_handle_scope
+    HandleScope(HandleScope const &) = delete;
+    void operator=(HandleScope const &) = delete;
+
     operator napi_handle_scope() const;
 
     Napi::Env Env() const;
@@ -1485,6 +1762,10 @@ namespace Napi {
     explicit EscapableHandleScope(Napi::Env env);
     ~EscapableHandleScope();
 
+    // Disallow copying to prevent double close of napi_escapable_handle_scope
+    EscapableHandleScope(EscapableHandleScope const &) = delete;
+    void operator=(EscapableHandleScope const &) = delete;
+
     operator napi_escapable_handle_scope() const;
 
     Napi::Env Env() const;
@@ -1493,6 +1774,47 @@ namespace Napi {
   private:
     napi_env _env;
     napi_escapable_handle_scope _scope;
+  };
+
+#if (NAPI_VERSION > 2)
+  class CallbackScope {
+  public:
+    CallbackScope(napi_env env, napi_callback_scope scope);
+    CallbackScope(napi_env env, napi_async_context context);
+    virtual ~CallbackScope();
+
+    // Disallow copying to prevent double close of napi_callback_scope
+    CallbackScope(CallbackScope const &) = delete;
+    void operator=(CallbackScope const &) = delete;
+
+    operator napi_callback_scope() const;
+
+    Napi::Env Env() const;
+
+  private:
+    napi_env _env;
+    napi_callback_scope _scope;
+  };
+#endif
+
+  class AsyncContext {
+  public:
+    explicit AsyncContext(napi_env env, const char* resource_name);
+    explicit AsyncContext(napi_env env, const char* resource_name, const Object& resource);
+    virtual ~AsyncContext();
+
+    AsyncContext(AsyncContext&& other);
+    AsyncContext& operator =(AsyncContext&& other);
+    AsyncContext(const AsyncContext&) = delete;
+    AsyncContext& operator =(AsyncContext&) = delete;
+
+    operator napi_async_context() const;
+
+    Napi::Env Env() const;
+
+  private:
+    napi_env _env;
+    napi_async_context _context;
   };
 
   class AsyncWorker {
@@ -1511,6 +1833,7 @@ namespace Napi {
 
     void Queue();
     void Cancel();
+    void SuppressDestruct();
 
     ObjectReference& Receiver();
     FunctionReference& Callback();
@@ -1532,9 +1855,18 @@ namespace Napi {
                          const char* resource_name,
                          const Object& resource);
 
+    explicit AsyncWorker(Napi::Env env);
+    explicit AsyncWorker(Napi::Env env,
+                         const char* resource_name);
+    explicit AsyncWorker(Napi::Env env,
+                         const char* resource_name,
+                         const Object& resource);
+
     virtual void Execute() = 0;
     virtual void OnOK();
     virtual void OnError(const Error& e);
+    virtual void Destroy();
+    virtual std::vector<napi_value> GetResult(Napi::Env env);
 
     void SetError(const std::string& error);
 
@@ -1549,12 +1881,286 @@ namespace Napi {
     ObjectReference _receiver;
     FunctionReference _callback;
     std::string _error;
+    bool _suppress_destruct;
   };
 
-  // Memory management. 
+  #if (NAPI_VERSION > 3)
+  class ThreadSafeFunction {
+  public:
+    // This API may only be called from the main thread.
+    template <typename ResourceString>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename ContextType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename Finalizer>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  Finalizer finalizeCallback);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename Finalizer,
+              typename FinalizerDataType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  Finalizer finalizeCallback,
+                                  FinalizerDataType* data);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename ContextType, typename Finalizer>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context,
+                                  Finalizer finalizeCallback);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename ContextType,
+              typename Finalizer, typename FinalizerDataType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context,
+                                  Finalizer finalizeCallback,
+                                  FinalizerDataType* data);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename ContextType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename Finalizer>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  Finalizer finalizeCallback);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename Finalizer,
+              typename FinalizerDataType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  Finalizer finalizeCallback,
+                                  FinalizerDataType* data);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename ContextType, typename Finalizer>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context,
+                                  Finalizer finalizeCallback);
+
+    // This API may only be called from the main thread.
+    template <typename ResourceString, typename ContextType,
+              typename Finalizer, typename FinalizerDataType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context,
+                                  Finalizer finalizeCallback,
+                                  FinalizerDataType* data);
+
+    ThreadSafeFunction();
+    ThreadSafeFunction(napi_threadsafe_function tsFunctionValue);
+
+    operator napi_threadsafe_function() const;
+
+    // This API may be called from any thread.
+    napi_status BlockingCall() const;
+
+    // This API may be called from any thread.
+    template <typename Callback>
+    napi_status BlockingCall(Callback callback) const;
+
+    // This API may be called from any thread.
+    template <typename DataType, typename Callback>
+    napi_status BlockingCall(DataType* data, Callback callback) const;
+
+    // This API may be called from any thread.
+    napi_status NonBlockingCall() const;
+
+    // This API may be called from any thread.
+    template <typename Callback>
+    napi_status NonBlockingCall(Callback callback) const;
+
+    // This API may be called from any thread.
+    template <typename DataType, typename Callback>
+    napi_status NonBlockingCall(DataType* data, Callback callback) const;
+
+    // This API may only be called from the main thread.
+    void Ref(napi_env env) const;
+
+    // This API may only be called from the main thread.
+    void Unref(napi_env env) const;
+
+    // This API may be called from any thread.
+    napi_status Acquire() const;
+
+    // This API may be called from any thread.
+    napi_status Release();
+
+    // This API may be called from any thread.
+    napi_status Abort();
+
+    struct ConvertibleContext
+    {
+      template <class T>
+      operator T*() { return static_cast<T*>(context); }
+      void* context;
+    };
+
+    // This API may be called from any thread.
+    ConvertibleContext GetContext() const;
+
+  private:
+    using CallbackWrapper = std::function<void(Napi::Env, Napi::Function)>;
+
+    template <typename ResourceString, typename ContextType,
+              typename Finalizer, typename FinalizerDataType>
+    static ThreadSafeFunction New(napi_env env,
+                                  const Function& callback,
+                                  const Object& resource,
+                                  ResourceString resourceName,
+                                  size_t maxQueueSize,
+                                  size_t initialThreadCount,
+                                  ContextType* context,
+                                  Finalizer finalizeCallback,
+                                  FinalizerDataType* data,
+                                  napi_finalize wrapper);
+
+    napi_status CallInternal(CallbackWrapper* callbackWrapper,
+                        napi_threadsafe_function_call_mode mode) const;
+
+    static void CallJS(napi_env env,
+                       napi_value jsCallback,
+                       void* context,
+                       void* data);
+
+    napi_threadsafe_function _tsfn;
+  };
+
+  template<class T>
+  class AsyncProgressWorker : public AsyncWorker {
+    public:
+     virtual ~AsyncProgressWorker();
+
+     class ExecutionProgress {
+        friend class AsyncProgressWorker;
+       public:
+        void Signal() const;
+        void Send(const T* data, size_t count) const;
+       private:
+        explicit ExecutionProgress(AsyncProgressWorker* worker) : _worker(worker) {}
+        AsyncProgressWorker* const _worker;
+     };
+
+    protected:
+    explicit AsyncProgressWorker(const Function& callback);
+    explicit AsyncProgressWorker(const Function& callback,
+                         const char* resource_name);
+    explicit AsyncProgressWorker(const Function& callback,
+                         const char* resource_name,
+                         const Object& resource);
+    explicit AsyncProgressWorker(const Object& receiver,
+                         const Function& callback);
+    explicit AsyncProgressWorker(const Object& receiver,
+                         const Function& callback,
+                         const char* resource_name);
+    explicit AsyncProgressWorker(const Object& receiver,
+                         const Function& callback,
+                         const char* resource_name,
+                         const Object& resource);
+
+// Optional callback of Napi::ThreadSafeFunction only available after NAPI_VERSION 4.
+// Refs: https://github.com/nodejs/node/pull/27791
+#if NAPI_VERSION > 4
+    explicit AsyncProgressWorker(Napi::Env env);
+    explicit AsyncProgressWorker(Napi::Env env,
+                         const char* resource_name);
+    explicit AsyncProgressWorker(Napi::Env env,
+                         const char* resource_name,
+                         const Object& resource);
+#endif
+
+     virtual void Execute(const ExecutionProgress& progress) = 0;
+     virtual void OnProgress(const T* data, size_t count) = 0;
+
+    private:
+     static void WorkProgress_(Napi::Env env, Napi::Function jsCallback, void* data);
+
+     void Execute() override;
+     void Signal() const;
+     void SendProgress_(const T* data, size_t count);
+
+     std::mutex _mutex;
+     T* _asyncdata;
+     size_t _asyncsize;
+     ThreadSafeFunction _tsfn;
+  };
+  #endif
+
+  // Memory management.
   class MemoryManagement {
-    public: 
+    public:
       static int64_t AdjustExternalMemory(Env env, int64_t change_in_bytes);
+  };
+
+  // Version management
+  class VersionManagement {
+    public:
+      static uint32_t GetNapiVersion(Env env);
+      static const napi_node_version* GetNodeVersion(Env env);
   };
 
 } // namespace Napi
