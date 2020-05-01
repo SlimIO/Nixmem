@@ -13,7 +13,9 @@
     "test": "ava --verbose",
     "doc": "jsdoc -c ./jsdoc.json -r -R ./README.md -P ./package.json --verbose",
     "coverage": "nyc npm test",
-    "report": "nyc report --reporter=html"
+    "report": "nyc report --reporter=html",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -49,7 +51,8 @@
   "homepage": "https://github.com/SlimIO/Nixmem#readme",
   "dependencies": {
     "node-addon-api": "^2.0.0",
-    "node-gyp-build": "^4.2.0"
+    "node-gyp-build": "^4.2.0",
+    "snyk": "^1.316.1"
   },
   "devDependencies": {
     "@commitlint/cli": "^8.0.0",
@@ -73,5 +76,6 @@
     "statements": 98,
     "functions": 98,
     "branches": 90
-  }
+  },
+  "snyk": true
 }
